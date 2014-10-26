@@ -1,0 +1,6 @@
+1.0.0
+First stable release.
+Only supports subtitle search by IMDB identifier.
+
+0.1.0
+Initial release.
