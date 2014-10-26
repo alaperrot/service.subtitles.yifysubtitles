@@ -1,6 +1,11 @@
 # -*- coding: utf-8 -*-
 
 
+"""
+YIFY Subtitles service plugin.
+"""
+
+
 import os
 import sys
 import urllib
@@ -29,6 +34,7 @@ __temp__ = xbmc.translatePath(os.path.join(__profile__, 'temp')).decode('utf-8')
 sys.path.append(__resource__)
 
 
+from omdbapi import OMDbAPI
 from yifysubtitles import YifySubtitles, YifySubtitlesListener, YifySubtitlesLogger
 
 
@@ -51,6 +57,9 @@ class YifySubtitlesService(YifySubtitlesListener, YifySubtitlesLogger):
         self._set_languages()
         self._cleanup_temp()
 
+        self._omdbapi = OMDbAPI()
+        self._omdbapi.logger = self
+
         self._provider = YifySubtitles()
         self._provider.listener = self
         self._provider.logger = self
@@ -59,28 +68,66 @@ class YifySubtitlesService(YifySubtitlesListener, YifySubtitlesLogger):
     def run(self):
         """Run the service, performing the requested action."""
 
-        if self._parameters['action'] == 'download':
-            self._download(self._parameters['url'], self._parameters['filename'])
+        try:
+            action = self._parameters['action']
+            if action == 'download':
+                self._download()
+            elif action in ['search', 'manualsearch']:
+                self._search()
+            else:
+                self.warn(u'unknown action {0}'.format(action))
 
-        elif self._parameters['action'] == 'search':
-            self._search(xbmc.Player().getVideoInfoTag().getIMDBNumber())
-
-        self._done()
+        finally:
+            self._done()
 
     def _done(self):
         """Tell XBMC that we're done."""
 
-        self.debug('Done')
+        self.debug(u'Done')
         xbmcplugin.endOfDirectory(self._handle)
 
-    def _download(self, url, filename):
-        self._provider.download(url, filename)
+    def _download(self):
+        """Download subtitle."""
 
-    def _search(self, imdb_id):
-        self._provider.search(imdb_id, self._languages)
+        url = self._parameters['url']
+        filename = self._parameters['filename']
+        if url and filename:
+            self._provider.download(url, filename)
+
+    def _search(self):
+        """Search subtitles."""
+
+        imdb_id = self._get_imdb_id()
+        if imdb_id:
+            self._provider.search(imdb_id, self._languages)
+
+    def _get_imdb_id(self):
+        """
+        Search the IMDB identifier for the currently playing video.
+
+        :return: IMDB identifier
+        :rtype: unicode
+        """
+
+        imdb_id = xbmc.Player().getVideoInfoTag().getIMDBNumber()
+        if imdb_id:
+            return imdb_id
+
+        title = xbmc.getInfoLabel('VideoPlayer.OriginalTitle') or xbmc.getInfoLabel('VideoPlayer.Title')
+        year = xbmc.getInfoLabel('VideoPlayer.Year')
+        if title and year:
+            return self._omdbapi.search(title, year)
+
+        return None
 
     def on_subtitle_found(self, subtitle):
-        self.info('Found {0} subtitle {1}:{2}'.format(subtitle['language'], subtitle['url'], subtitle['filename']))
+        """Event handler called when a matching subtitle has been found.
+
+        :param subtitle: Subtitle details
+        :type subtitle: dict of [str, unicode]
+        """
+
+        self.info(u'Found {0} subtitle {1}:{2}'.format(subtitle['language'], subtitle['url'], subtitle['filename']))
 
         list_item = xbmcgui.ListItem(
             label=subtitle['language'],
@@ -92,7 +139,7 @@ class YifySubtitlesService(YifySubtitlesListener, YifySubtitlesLogger):
         list_item.setProperty('sync', 'false')
         list_item.setProperty('hearing_imp', 'false')
 
-        url = 'plugin://{0}/?action=download&url={1}&filename={2}'.format(
+        url = u'plugin://{0}/?action=download&url={1}&filename={2}'.format(
             __scriptid__,
             subtitle['url'],
             subtitle['filename']
@@ -101,21 +148,51 @@ class YifySubtitlesService(YifySubtitlesListener, YifySubtitlesLogger):
         xbmcplugin.addDirectoryItem(handle=self._handle, url=url, listitem=list_item, isFolder=False)
 
     def on_subtitle_downloaded(self, path):
-        self.info('Subtitle {0} downloaded'.format(path))
+        """Event handler called when a subtitle has been downloaded and unpacked.
+
+        :param path: Subtitle path
+        :type path: unicode
+        """
+
+        self.info(u'Subtitle {0} downloaded'.format(path))
 
         list_item = xbmcgui.ListItem(label=path)
         xbmcplugin.addDirectoryItem(handle=self._handle, url=path, listitem=list_item, isFolder=False)
 
     def debug(self, message):
+        """Print a debug message.
+
+        :param message: Message
+        :type message: unicode
+        """
+
         xbmc.log(u'{0} - {1}'.format(u'YIFY Subtitles', message).encode('utf-8'), level=xbmc.LOGDEBUG)
 
     def info(self, message):
+        """Print an informative message.
+
+        :param message: Message
+        :type message: unicode
+        """
+
         xbmc.log(u'{0} - {1}'.format(u'YIFY Subtitles', message).encode('utf-8'), level=xbmc.LOGINFO)
 
     def warn(self, message):
+        """Print a warning message.
+
+        :param message: Message
+        :type message: unicode
+        """
+
         xbmc.log(u'{0} - {1}'.format(u'YIFY Subtitles', message).encode('utf-8'), level=xbmc.LOGWARNING)
 
     def error(self, message):
+        """Print an error message.
+
+        :param message: Message
+        :type message: unicode
+        """
+
         xbmc.log(u'{0} - {1}'.format(u'YIFY Subtitles', message).encode('utf-8'), level=xbmc.LOGERROR)
 
     @staticmethod

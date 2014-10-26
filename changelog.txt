@@ -1,3 +1,10 @@
+1.2.0
+New stable release.
+Added support for subtitle search by title and year of release.
+
+1.1.0
+New development release.
+
 1.0.0
 First stable release.
 Only supports subtitle search by IMDB identifier.

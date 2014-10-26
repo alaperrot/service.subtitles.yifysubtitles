@@ -1,6 +1,11 @@
 # -*- coding: utf-8 -*-
 
 
+"""
+YIFY Subtitles website interface.
+"""
+
+
 from StringIO import StringIO
 from abc import abstractmethod, ABCMeta
 from contextlib import closing
@@ -23,7 +28,7 @@ class YifySubtitlesLogger:
         """Print a debug message.
 
         :param message: Message
-        :type message: str
+        :type message: unicode
         """
 
     @abstractmethod
@@ -31,7 +36,7 @@ class YifySubtitlesLogger:
         """Print an informative message.
 
         :param message: Message
-        :type message: str
+        :type message: unicode
         """
 
     @abstractmethod
@@ -39,7 +44,7 @@ class YifySubtitlesLogger:
         """Print a warning message.
 
         :param message: Message
-        :type message: str
+        :type message: unicode
         """
 
     @abstractmethod
@@ -47,7 +52,7 @@ class YifySubtitlesLogger:
         """Print an error message.
 
         :param message: Message
-        :type message: str
+        :type message: unicode
         """
 
 
@@ -64,7 +69,7 @@ class YifySubtitlesListener:
         """Event handler called when a matching subtitle has been found.
 
         :param subtitle: Subtitle details
-        :type subtitle: dict of [str, str]
+        :type subtitle: dict of [str, unicode]
         """
 
     @abstractmethod
@@ -72,7 +77,7 @@ class YifySubtitlesListener:
         """Event handler called when a subtitle has been downloaded and unpacked.
 
         :param path: Subtitle path
-        :type path: str
+        :type path: unicode
         """
 
 
@@ -89,9 +94,9 @@ class YifySubtitles:
         """:type: YifySubtitlesLogger"""
 
         self.workdir = None
-        """:type: str"""
+        """:type: unicode"""
 
-        self._base_url = 'http://www.yifysubtitles.com'
+        self._base_url = u'http://www.yifysubtitles.com'
 
     def download(self, url, filename):
         """Download a subtitle.
@@ -99,19 +104,19 @@ class YifySubtitles:
         The on_subtitle_download() method of the registered listener will be called for each downloaded subtitle.
 
         :param url: URL to subtitle archive
-        :type url: str
+        :type url: unicode
         :param filename: Path to subtitle file within the archive
-        :type filename: str
+        :type filename: unicode
         """
 
         path = os.path.join(self.workdir, os.path.basename(filename))
 
-        self.logger.debug('Downloading subtitle archive from {0}'.format(url))
+        self.logger.debug(u'Downloading subtitle archive from {0}'.format(url))
         with closing(urlopen(url)) as f:
             content = StringIO(f.read())
 
-        self.logger.debug('Extracting subtitle to {0}'.format(path))
-        with ZipFile(content) as z, closing(open(path, mode='wb')) as f:
+        self.logger.debug(u'Extracting subtitle to {0}'.format(path))
+        with ZipFile(content) as z, closing(open(path.encode('utf-8'), mode='wb')) as f:
             f.write(z.read(filename))
 
         self.listener.on_subtitle_downloaded(path)
@@ -122,11 +127,12 @@ class YifySubtitles:
         The on_subtitle_found() method of the registered listener will be called for each found subtitle.
 
         :param imdb_id: IMDB identifier
-        :type imdb_id: str
+        :type imdb_id: unicode
         :param languages: Accepted languages
-        :type languages: list of str
+        :type languages: list of unicode
         """
 
+        self.logger.debug(u'Searching subtitles for IMDB identifier {0}'.format(imdb_id))
         page = self._fetch_movie_page(imdb_id)
         self._list_subtitles(page, languages)
 
@@ -134,7 +140,7 @@ class YifySubtitles:
         """Fetch the movie page for an IMDB identifier.
 
         :param imdb_id: IMDB identifier
-        :type imdb_id: str
+        :type imdb_id: unicode
         :return: Movie page
         :rtype: unicode
         """
@@ -150,7 +156,7 @@ class YifySubtitles:
         """Fetch a subtitle page.
 
         :param link: Relative URL to subtitle page
-        :type link: str
+        :type link: unicode
         :return: Subtitle page
         :rtype: unicode
         """
@@ -168,7 +174,7 @@ class YifySubtitles:
         :param page: Movie page
         :type page: unicode
         :param languages: Accepted languages
-        :type languages: list of str
+        :type languages: list of unicode
         """
 
         pattern = re.compile(r'<li data-id=".*?"(?: class="((?:high|low)-rating)")?>\s*'
@@ -184,9 +190,9 @@ class YifySubtitles:
                              re.UNICODE)
 
         for match in pattern.findall(page):
-            language = self._get_subtitle_language(match[2])
-            page_url = match[1].encode('utf-8')
-            rating = self._get_subtitle_rating(match[0])
+            language = self._get_subtitle_language(unicode(match[2]))
+            page_url = unicode(match[1])
+            rating = self._get_subtitle_rating(unicode(match[0]))
 
             if language in languages:
                 page = self._fetch_subtitle_page(page_url)
@@ -199,13 +205,13 @@ class YifySubtitles:
                 })
 
             else:
-                self.logger.debug('Ignoring {0} subtitle {1}'.format(language, page_url))
+                self.logger.debug(u'Ignoring {0} subtitle {1}'.format(language, page_url))
 
     def _list_subtitles_archive(self, archive):
         """List subtitles from a ZIP archive.
 
         :param archive: ZIP archive URL
-        :type archive: dict of [str, str]
+        :type archive: dict of [str, unicode]
         """
 
         with closing(urlopen(archive['url'])) as f:
@@ -218,7 +224,7 @@ class YifySubtitles:
             ]
 
         for filename in filenames:
-            self.logger.debug('Found {0} subtitle {1}:{2}'.format(archive['language'], archive['url'], filename))
+            self.logger.debug(u'Found {0} subtitle {1}:{2}'.format(archive['language'], archive['url'], filename))
             self.listener.on_subtitle_found({
                 'filename': filename,
                 'language': archive['language'],
@@ -233,13 +239,13 @@ class YifySubtitles:
         :param language: Subtitle language
         :type language: unicode
         :return: XBMC language
-        :rtype: str
+        :rtype: unicode
         """
 
         return {
             u'Brazilian Portuguese': u'Portuguese (Brazil)',
             u'Farsi/Persian': u'Persian',
-        }.get(language, language).encode('utf-8')
+        }.get(language, language)
 
     @staticmethod
     def _get_subtitle_rating(rating):
@@ -248,13 +254,13 @@ class YifySubtitles:
         :param rating: Subtitles rating
         :type rating: unicode
         :return: Subtitles rating
-        :rtype: str
+        :rtype: unicode
         """
 
         return {
-            u'high-rating': '5',
-            u'low-rating': '0',
-        }.get(rating, '3')
+            u'high-rating': u'5',
+            u'low-rating': u'0',
+        }.get(rating, u'3')
 
     @staticmethod
     def _get_subtitle_url(page):
@@ -263,9 +269,9 @@ class YifySubtitles:
         :param page: Subtitle page
         :type page: unicode
         :return: Subtitle URL
-        :rtype: str
+        :rtype: unicode
         """
 
         pattern = re.compile(r'<a href="([^"]*)" class="[^"]*\bdownload-subtitle\b[^"]*">', re.UNICODE)
         match = pattern.search(page)
-        return str(match.group(1)) if match else None
+        return unicode(match.group(1)) if match else None
